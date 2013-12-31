@@ -271,6 +271,31 @@ basis with an options key:
                                                          "EC2KeyName" "mykey"
                                                          "ImageId" "ami-cbab67a2"}}}]}}
 
+### Deploying within a VPC
+
+It is frequently necessary to deploy ElaticBeanstalk applications within a VPC.
+This can be accomplished by setting a number of option settings that specify the VpcId,
+security group, etc. However, the physical resource IDs are needed. For convenience,
+the `:stack` key allows a stack and associated option settings to be configured by
+logical resource ID. The logical IDs of the resources within the named stack are
+converted to physical resource IDs automatically.
+
+    :aws
+    {:beanstalk
+     {:environments
+      [{:name "dev"
+        :stack {:name "my-application-stack"
+                :options {"aws:autoscaling:launchconfiguration"
+                          {"IamInstanceProfile" "RootInstanceProfile"
+                           "SecurityGroups" "BeanstalkSecurityGroup"}
+                          "aws:ec2:vpc"
+                          {"VpcId" "VPC"
+                          "Subnets" "PrivateSubnet"}}}
+        :options {"aws:autoscaling:asg" {"MinSize" "1" "MaxSize" "1"}
+                  "aws:autoscaling:launchconfiguration" {"InstanceType" "m1.medium"
+                                                         "EC2KeyName" "mykey"
+                                                         "ImageId" "ami-cbab67a2"}}}]}}
+
 ### S3 Buckets
 
 [Amazon Elastic Beanstalk][1] uses

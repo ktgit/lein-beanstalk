@@ -18,6 +18,10 @@
     com.amazonaws.services.elasticbeanstalk.model.UpdateEnvironmentRequest
     com.amazonaws.services.elasticbeanstalk.model.S3Location
     com.amazonaws.services.elasticbeanstalk.model.TerminateEnvironmentRequest
+    com.amazonaws.services.cloudformation.AmazonCloudFormationClient
+    com.amazonaws.services.cloudformation.model.DescribeStackResourceRequest
+    com.amazonaws.services.cloudformation.model.DescribeStackResourceResult
+    com.amazonaws.services.cloudformation.model.StackResourceDetail
     com.amazonaws.services.s3.AmazonS3Client
     com.amazonaws.services.s3.model.Region))
 
@@ -84,6 +88,16 @@
    :ap-northeast-1 "elasticbeanstalk.ap-northeast-1.amazonaws.com"
    :sa-east-1      "elasticbeanstalk.sa-east-1.amazonaws.com"})
 
+(def cloudformation-endpoints
+  {:us-east-1      "cloudformation.us-east-1.amazonaws.com"
+   :us-west-1      "cloudformation.us-west-1.amazonaws.com"
+   :us-west-2      "cloudformation.us-west-2.amazonaws.com"
+   :eu-west-1      "cloudformation.eu-west-1.amazonaws.com"
+   :ap-southeast-1 "cloudformation.ap-southeast-1.amazonaws.com"
+   :ap-southeast-2 "cloudformation.ap-southeast-2.amazonaws.com"
+   :ap-northeast-1 "cloudformation.ap-northeast-1.amazonaws.com"
+   :sa-east-1      "cloudformation.sa-east-1.amazonaws.com"})
+
 (defn project-endpoint [project endpoints]
   (-> project :aws :beanstalk (:region :us-east-1) keyword endpoints))
 
@@ -114,6 +128,10 @@
 (defn- beanstalk-client [project]
   (doto (AWSElasticBeanstalkClient. (credentials project))
     (.setEndpoint (project-endpoint project beanstalk-endpoints))))
+
+(defn- cloudformation-client [project]
+  (doto (AmazonCloudFormationClient. (credentials project))
+    (.setEndpoint (project-endpoint project cloudformation-endpoints))))
 
 (defn create-app-version
   [project filename]
@@ -165,6 +183,19 @@
        key)
      value)))
 
+(defn stack-options
+  [project options]
+  (let [{:keys [name options]} options]
+    (apply concat
+           (for [[namespace keyvals] options]
+             (for [[key logical-id] keyvals]
+               (let [response (.describeStackResource
+                               (cloudformation-client project)
+                               (doto (DescribeStackResourceRequest.)
+                                 (.setStackName name)
+                                 (.setLogicalResourceId logical-id)))]
+                 (ConfigurationOptionSetting. namespace key (-> response .getStackResourceDetail .getPhysicalResourceId))))))))
+
 (defn extra-options
   [options]
   (apply concat
@@ -182,6 +213,8 @@
       (.setEnvironmentName (:name env))
       (.setVersionLabel   (app-version project))
       (.setOptionSettings (concat (env-var-options project env)
+                                  (stack-options project (merge (-> project :aws :beanstalk :stack)
+                                                                (:stack env)))
                                   (extra-options (merge (-> project :aws :beanstalk :options)
                                                         (:options env)))))
       (.setCNAMEPrefix (:cname-prefix env))
