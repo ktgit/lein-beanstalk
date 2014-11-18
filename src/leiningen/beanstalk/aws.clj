@@ -1,6 +1,7 @@
 (ns leiningen.beanstalk.aws
   "AWS-specific libraries."
   (:require
+    [clojure.data :as data]
     [clojure.java.io :as io]
     [clojure.string :as str])
   (:import
@@ -14,6 +15,7 @@
     com.amazonaws.services.elasticbeanstalk.model.CreateEnvironmentRequest
     com.amazonaws.services.elasticbeanstalk.model.DeleteApplicationRequest
     com.amazonaws.services.elasticbeanstalk.model.DeleteApplicationVersionRequest
+    com.amazonaws.services.elasticbeanstalk.model.DescribeConfigurationSettingsRequest
     com.amazonaws.services.elasticbeanstalk.model.DescribeEnvironmentsRequest
     com.amazonaws.services.elasticbeanstalk.model.UpdateEnvironmentRequest
     com.amazonaws.services.elasticbeanstalk.model.S3Location
@@ -156,10 +158,13 @@
     {"AWS_ACCESS_KEY_ID" access-key
      "AWS_SECRET_KEY" secret-key}))
 
+(defn merge-env-vars [project options]
+  (merge (default-env-vars project)
+         (-> project :aws :beanstalk :env)
+         (:env options)))
+
 (defn env-var-options [project options]
-  (for [[key value] (merge (default-env-vars project)
-                           (-> project :aws :beanstalk :env)
-                           (:env options))]
+  (for [[key value] (merge-env-vars project options)]
     (ConfigurationOptionSetting.
      "aws:elasticbeanstalk:application:environment"
      (if (keyword? key)
@@ -202,6 +207,29 @@
       (.setEnvironmentName (.getEnvironmentName env))
       (.setOptionSettings (env-var-options project options)))))
 
+(defn get-environment-settings [project env]
+  (->> (.describeConfigurationSettings
+        (beanstalk-client project)
+        (doto (DescribeConfigurationSettingsRequest.)
+          (.setApplicationName (app-name project))
+          (.setEnvironmentName (.getEnvironmentName env))))
+       (.getConfigurationSettings)
+       first
+       (.getOptionSettings)
+       (filter #(= "aws:elasticbeanstalk:application:environment" (.getNamespace %)))
+       (map #(vector (.getOptionName %) (.getValue %)))
+       (into {})))
+
+(defn assert-environment-settings-unchanged [project env options]
+  (let [[local remote _] (data/diff (merge-env-vars project options)
+                                    (get-environment-settings project env))]
+    (when-not (or (and (empty? local) (empty? remote))
+                  (every? #{"JDBC_CONNECTION_STRING" "PARAM1" "PARAM2" "PARAM3" "PARAM4" "PARAM5"}
+                          (keys remote)))
+      (throw (IllegalStateException.
+              (format "Cannot deploy version because environment settings have changed; local %s; remote %s"
+                      local remote))))))
+
 (defn update-environment-version [project env]
   (.updateEnvironment
     (beanstalk-client project)
@@ -243,11 +271,16 @@
        (let [value (poll)]
          (if (pred value) value (recur))))))
 
+(def ^:dynamic *update-environment-settings?* true)
+
 (defn update-environment [project env {name :name :as options}]
   (println (str "Updating '" name "' environment")
            "(this may take several minutes)")
-  (update-environment-settings project env options)
-  (poll-until ready? #(get-env project name))
+  (if *update-environment-settings?*
+    (do
+      (update-environment-settings project env options)
+      (poll-until ready? #(get-env project name)))
+    (assert-environment-settings-unchanged project env options))
   (update-environment-version project env))
 
 (defn deploy-environment
