@@ -36,19 +36,11 @@
   "Deploy the current project to Amazon Elastic Beanstalk."
   ([project]
      (println "Usage: lein beanstalk deploy <environment>"))
-  ([project env-name]
+  ([project env-name & [war-file]]
      (if-let [env (get-project-env project env-name)]
-       (let [filename (war-filename project)
-             path (uberwar project filename)]
-         (aws/s3-upload-file project path)
-         (aws/create-app-version project filename)
-         (aws/deploy-environment project env))
-       (println (str "Environment '" env-name "' not defined!"))))
-  ([project env-name war-file]
-     (if-let [env (get-project-env project env-name)]
-       (let [filename (war-filename war-file)
-             path war-file]
-         (aws/s3-upload-file project path filename)
+       (let [filename (war-filename (or war-file project))
+             path (or war-file (uberwar project filename))]
+         (aws/s3-upload-file project path (when war-file filename))
          (aws/create-app-version project filename)
          (aws/deploy-environment project env))
        (println (str "Environment '" env-name "' not defined!")))))
