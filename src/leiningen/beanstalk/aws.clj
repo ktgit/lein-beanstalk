@@ -102,24 +102,16 @@
     (.createBucket client bucket region)))
 
 (defn s3-upload-file
-  ([project filepath]
-    (let [bucket  (s3-bucket-name project)
-          file    (io/file filepath)
-          ep-desc (project-endpoint project s3-endpoints)]
-      (doto (AmazonS3Client. (credentials project))
-        (.setEndpoint (:ep ep-desc))
-        (create-bucket bucket (:region ep-desc))
-        (.putObject bucket (.getName file) file))
-      (println "Uploaded" (.getName file) "to S3 Bucket")))
-  ([project filepath filename]
-    (let [bucket  (s3-bucket-name project)
-          file    (io/file filepath)
-          ep-desc (project-endpoint project s3-endpoints)]
+  [project filepath & [filename]]
+  (let [bucket   (s3-bucket-name project)
+        file     (io/file filepath)
+        filename (or filename (.getName file))
+        ep-desc  (project-endpoint project s3-endpoints)]
       (doto (AmazonS3Client. (credentials project))
         (.setEndpoint (:ep ep-desc))
         (create-bucket bucket (:region ep-desc))
         (.putObject bucket filename file))
-      (println "Uploaded" filename "to S3 Bucket"))))
+      (println "Uploaded" filename "to S3 Bucket")))
 
 (defn- beanstalk-client [project]
   (doto (AWSElasticBeanstalkClient. (credentials project))
