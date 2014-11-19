@@ -220,7 +220,39 @@
        (map #(vector (.getOptionName %) (.getValue %)))
        (into {})))
 
-(defn assert-environment-settings-unchanged [project env options]
+(def ^:private eb-default-environment-settings
+  #{"JDBC_CONNECTION_STRING" "PARAM1" "PARAM2" "PARAM3" "PARAM4" "PARAM5"})
+
+(defn prune-eb-default-environment-settings
+  "If the default Elastic Beanstalk environment settings (JDBC_CONNECTION_STRING,
+  PARAM1, etc.) are set to the empty string remotely, but don't exist locally,
+  remove them from the remote settings. This is necessary because the AWS Elastic
+  Beanstalk console gives you no way to remove the defaults."
+  [[local remote both]]
+  (let [remote (->> remote
+                    (filter (fn [[k v]] (not (and (contains? eb-default-environment-settings k)
+                                                 (empty? v)
+                                                 (not (contains? local k)))))))]
+    [local remote both]))
+
+(defn diff-environment-settings
+  "Compares local environment settings with remote environment settings and returns
+  a data structure in the same format as clojure.data/diff."
+  [project env options]
+  (let [[local remote both] (-> (data/diff (merge-env-vars project options)
+                                           (get-environment-settings project env))
+                                prune-eb-default-environment-settings)]
+    (when-not (and (empty? local) (empty? remote))
+      (throw (IllegalStateException.
+              (format "Cannot deploy version because environment settings have changed; local %s; remote %s"
+                      local remote))))))
+
+(defn assert-environment-settings-unchanged
+  "Throws an exception if local environment settings (i.e. the value of the :env key
+  in the currently active environment under :aws :beanstalk :environments in your
+  project.clj) differ from the remote environment settings (i.e. the key/value pairs
+  in Software Configuration > Environment Properties in the Elastic Beanstalk console)."
+  [project env options]
   (let [[local remote _] (data/diff (merge-env-vars project options)
                                     (get-environment-settings project env))]
     (when-not (or (and (empty? local) (empty? remote))
