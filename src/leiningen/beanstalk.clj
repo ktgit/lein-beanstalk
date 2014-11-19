@@ -54,7 +54,7 @@
        (deploy project env-name war-file))))
 
 (defn terminate
-  "Terminte the environment for the current project on Amazon Elastic Beanstalk."
+  "Terminate the environment for the current project on Amazon Elastic Beanstalk."
   ([project]
      (println "Usage: lein beanstalk terminate <environment>"))
   ([project env-name]
