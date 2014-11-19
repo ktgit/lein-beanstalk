@@ -67,6 +67,33 @@ to the deploy command.
 
     $ lein beanstalk deploy development target/myproject.war
 
+#### Rolling Version Deploy
+
+A normal deployment will incur some downtime, as both the environment
+settings update and the version deployment will stop the Tomcat server
+on all EC2 instances at once. There are several work-arounds for this
+(see [Deploying Versions with Zero Downtime][7],
+[Demystified – Zero Downtime with AWS Elastic Beanstalk][8], and my
+preferred Blue-Green approach from [ThoughtWorks][9]), but all of them
+have drawbacks compared to Elastic Beanstalk's new (as of October 2014)
+[Rolling Version Deploy feature][10].
+
+If you are only deploying a new version and **not** changing any
+environment settings (i.e. Software Configuration > Environment Properties
+in the AWS Elastic Beanstalk console for your environment), you can
+use the `deploy-version` command:
+
+    $ lein beanstalk deploy-version development
+
+You can also specify a custom WAR as above.
+
+`deploy-version` will verify that you have no differences between the
+Elastic Beanstalk environment's settings and the environment's `:env`
+map in `:aws :beanstalk :environments` in your `project.clj`. If there
+are any differences, the deployment will abort through an exception
+and you will need to proceed with a normal deployment in order to update
+the environment settings automatically.
+
 ### Info
 
 To get information about the application itself run
@@ -341,3 +368,7 @@ We also welcome your contributions and will do our best to keep this repo update
 [4]: http://docs.aws.amazon.com/elasticbeanstalk/latest/APIReference/API_ListAvailableSolutionStacks.html
 [5]: http://docs.aws.amazon.com/elasticbeanstalk/latest/dg/command-options.html
 [6]: http://aws.typepad.com/aws/2013/12/background-task-handling-for-aws-elastic-beanstalk.html
+[7]: http://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.CNAMESwap.html
+[8]: http://www.hudku.com/blog/demystified-zero-downtime-with-amazon/
+[9]: http://www.thoughtworks.com/insights/blog/implementing-blue-green-deployments-aws
+[10]: http://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.rolling-version-deploy.html
