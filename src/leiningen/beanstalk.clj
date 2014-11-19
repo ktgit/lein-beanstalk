@@ -36,25 +36,25 @@
   "Deploy the current project to Amazon Elastic Beanstalk."
   ([project]
      (println "Usage: lein beanstalk deploy <environment>"))
-  ([project env-name]
+  ([project env-name & [war-file]]
      (if-let [env (get-project-env project env-name)]
-       (let [filename (war-filename project)
-             path (uberwar project filename)]
-         (aws/s3-upload-file project path)
-         (aws/create-app-version project filename)
-         (aws/deploy-environment project env))
-       (println (str "Environment '" env-name "' not defined!"))))
-  ([project env-name war-file]
-     (if-let [env (get-project-env project env-name)]
-       (let [filename (war-filename war-file)
-             path war-file]
-         (aws/s3-upload-file project path filename)
+       (let [filename (war-filename (or war-file project))
+             path (or war-file (uberwar project filename))]
+         (aws/s3-upload-file project path (when war-file filename))
          (aws/create-app-version project filename)
          (aws/deploy-environment project env))
        (println (str "Environment '" env-name "' not defined!")))))
 
+(defn deploy-version
+  "Deploy a new version of the current project to Amazon Elastic Beanstalk."
+  ([project]
+     (println "Usage: lein beanstalk deploy-version <environment>"))
+  ([project env-name & [war-file]]
+     (binding [aws/*update-environment-settings?* false]
+       (deploy project env-name war-file))))
+
 (defn terminate
-  "Terminte the environment for the current project on Amazon Elastic Beanstalk."
+  "Terminate the environment for the current project on Amazon Elastic Beanstalk."
   ([project]
      (println "Usage: lein beanstalk terminate <environment>"))
   ([project env-name]
@@ -127,15 +127,16 @@
 
 (defn beanstalk
   "Manage Amazon's Elastic Beanstalk service."
-  {:help-arglists '([clean deploy info terminate])
-   :subtasks [#'clean #'deploy #'info #'terminate]}
+  {:help-arglists '([clean deploy deploy-version info terminate])
+   :subtasks [#'clean #'deploy #'deploy-version #'info #'terminate]}
   ([project]
      (println (help-for "beanstalk")))
   ([project subtask & args]
      (aws/quiet-logger)
      (case subtask
-       "clean"     (apply clean project args)
-       "deploy"    (apply deploy project args)
-       "info"      (apply info project args)
-       "terminate" (apply terminate project args)
+       "clean"          (apply clean project args)
+       "deploy"         (apply deploy project args)
+       "deploy-version" (apply deploy-version project args)
+       "info"           (apply info project args)
+       "terminate"      (apply terminate project args)
        (println (help-for "beanstalk")))))
